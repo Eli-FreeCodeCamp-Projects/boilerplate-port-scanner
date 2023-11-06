@@ -57,38 +57,55 @@ class PortScanner:
         """"""
         # creating the socket object
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.settimeout(5)
+        self.sock.settimeout(2)
 
     def is_port_open(self, port) -> bool:
         """Test if the port is open"""
-        return self.sock.connect_ex((self.host, port)) == 0
-    
+        result = False
+        try:
+            result = self.sock.connect_ex((self.host, port)) == 0
+        except Exception:
+            result = False
+        return result
+
     def scan_ports(self) -> bool:
         """Test if the port is open"""
-        
         res = None
-        if self.is_ready():
-            res = []
-            for port in range(self.port_range[0], self.port_range[1]):
-                self.init_socket()
-                if self.is_port_open(port):
-                    res.append(port)
-                self.sock.close()
+        try:
+            if self.is_ready():
+                res = []
+                for port in range(self.port_range[0], self.port_range[1]):
+                    self.init_socket()
+                    if self.is_port_open(port):
+                        res.append(port)
+                    self.close_socket()
+        except Exception:
+            self.close_socket()
         return res
     
     def get_verbose(self, scan):
         """"""
-        result = """
-        Open ports for %s (%s)
-        PORT\tSERVICE
-        """ % (self.host_name, self.ip_addr)
+        if self.host_name is not None and self.ip_addr is not None:
+            result = "\r\nOpen ports for %s (%s)\r\n"% (self.host_name, self.ip_addr)
+        elif self.host_name is not None:
+            result = "\r\nOpen ports for %s\r\n"% (self.host_name)
+        else:
+            result = "\r\nOpen ports for %s\r\n"% (self.ip_addr)
+        
+        result += "PORT     SERVICE\r\n"
 
         if isinstance(scan, list) and len(scan) > 0:
             for port in scan:
+                nb_spaces = 9 - len(str(port))
+                spacer = " " * nb_spaces
                 if port in ports_and_services:
-                    result += "%s\t%s" % (port, ports_and_services.get(port))
+                    result += "%s%s%s\r\n" % (
+                        port,
+                        spacer,
+                        ports_and_services.get(port)
+                    )
                 else:
-                    result += "%s\t%s" % (port, "UNKNWOWN")
+                    result += "%s%s%s\r\n" % (port, spacer, "UNKNWOWN")
         return result
 
     def run(self):
@@ -98,25 +115,48 @@ class PortScanner:
             scan = self.get_verbose(scan)
         return scan
 
-
-    @staticmethod
-    def get_host_name(ip_address: str) -> bool:
-        """Test if is valid ip adress"""
-        result = "Unknown"
+    def close_socket(self):
+        """"""
+        result = False
         try:
-            result = socket.gethostbyaddr(ip_address)
+            self.sock.close()
+            result = True
         except Exception:
             result = "Unknown"
         return result
+
+    @staticmethod
+    def port_to_string(port: int) -> bool:
+        """Test if is valid ip adress"""
+        result = ""
+        if port < 10:
+            result = "    %s"%port
+        elif port < 100:
+            result = "   %s"%port
+        elif port < 1000:
+            result = "  %s"%port
+        elif port < 10000:
+            result = " %s"%port
+        return result
+
+    @staticmethod
+    def get_host_name(ip_address: str) -> str:
+        """Test if is valid ip adress"""
+        result = None
+        try:
+            result = socket.gethostbyaddr(ip_address)[0]
+        except Exception:
+            result = None
+        return result
     
     @staticmethod
-    def get_ip_address(host_name: str) -> bool:
+    def get_ip_address(host_name: str) -> str:
         """Test if is valid ip adress"""
-        result = "Unknown"
+        result = None
         try:
             result = socket.gethostbyname(host_name)
         except Exception:
-            result = "Unknown"
+            result = None
         return result
 
     @staticmethod
@@ -155,7 +195,7 @@ def get_open_ports(target, port_range, verbose=False):
     result = []
     try:
         scanner = PortScanner(target, port_range, verbose)
-        result = scanner.run()
+        scanner.run()
     except InvalidParamsError as ex:
         result = str(ex)
 
