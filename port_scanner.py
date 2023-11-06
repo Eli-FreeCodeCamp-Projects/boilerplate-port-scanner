@@ -15,7 +15,7 @@ class PortScanner:
         self.host_type = None
         self.port_range = None
         self.verbose = False
-        self.init_socket()
+        
         self.init_params(host, port_range, verbose)
     
     (HOST_IP, HOST_URL) = range(2)
@@ -24,8 +24,7 @@ class PortScanner:
     REG_IS_URL = re.compile(r'^(?:[0-9A-z.]+.)?[0-9A-z.]+.[a-z]+$')
 
     def is_ready(self):
-        return self.sock is not None\
-            and self.ip_addr is not None\
+        return self.ip_addr is not None\
             and self.port_range is not None\
     
     def init_params(self, host, port_range, verbose=False):
@@ -60,7 +59,7 @@ class PortScanner:
 
     def is_port_open(self, port) -> bool:
         """Test if the port is open"""
-        return not self.sock.connect_ex((self.ip_addr, port))
+        return self.sock.connect_ex((self.ip_addr, port)) == 0
     
     def scan_ports(self) -> bool:
         """Test if the port is open"""
@@ -68,9 +67,11 @@ class PortScanner:
         res = None
         if self.is_ready():
             res = []
-            for port in self.port_range:
+            for port in range(self.port_range[0], self.port_range[1]):
+                self.init_socket()
                 if self.is_port_open(port):
                     res.append(port)
+                self.sock.close()
         return res
     
     def get_verbose(self, scan):
