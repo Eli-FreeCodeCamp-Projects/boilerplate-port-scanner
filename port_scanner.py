@@ -10,6 +10,7 @@ class PortScanner:
     def __init__(self, host, port_range, verbose=False):
         """"""
         self.sock = None
+        self.host = None
         self.host_name = None
         self.ip_addr = None
         self.host_type = None
@@ -24,7 +25,7 @@ class PortScanner:
     REG_IS_URL = re.compile(r'^(?:[0-9A-z.]+.)?[0-9A-z.]+.[a-z]+$')
 
     def is_ready(self):
-        return self.ip_addr is not None\
+        return self.host is not None\
             and self.port_range is not None\
     
     def init_params(self, host, port_range, verbose=False):
@@ -34,19 +35,20 @@ class PortScanner:
             if not PortScanner.is_valid_ip(host):
                 raise InvalidParamsError("Error: Invalid IP address")
             else:
-                self.host_name = socket.gethostbyaddr(host)
+                self.host_name = PortScanner.get_host_name(host)
                 self.ip_addr = host
         elif self.host_type == PortScanner.HOST_URL:
             if not PortScanner.is_valid_url(host):
                 raise InvalidParamsError("Error: Invalid hostname")
             else:
                 self.host_name = host
-                self.ip_addr = socket.gethostbyname(host)
+                self.ip_addr = PortScanner.get_ip_address(host)
         else:
             raise InvalidParamsError("Error: Invalid hostname")
         
         if not PortScanner.is_valid_port_range(port_range):
             raise InvalidParamsError("Error: Invalid ports range.")
+        self.host = host
         self.port_range = port_range
         if verbose is True:
             self.verbose = True
@@ -59,7 +61,7 @@ class PortScanner:
 
     def is_port_open(self, port) -> bool:
         """Test if the port is open"""
-        return self.sock.connect_ex((self.ip_addr, port)) == 0
+        return self.sock.connect_ex((self.host, port)) == 0
     
     def scan_ports(self) -> bool:
         """Test if the port is open"""
@@ -97,6 +99,25 @@ class PortScanner:
         return scan
 
 
+    @staticmethod
+    def get_host_name(ip_address: str) -> bool:
+        """Test if is valid ip adress"""
+        result = "Unknown"
+        try:
+            result = socket.gethostbyaddr(ip_address)
+        except Exception:
+            result = "Unknown"
+        return result
+    
+    @staticmethod
+    def get_ip_address(host_name: str) -> bool:
+        """Test if is valid ip adress"""
+        result = "Unknown"
+        try:
+            result = socket.gethostbyname(host_name)
+        except Exception:
+            result = "Unknown"
+        return result
 
     @staticmethod
     def is_valid_ip(ip_address: str) -> bool:
