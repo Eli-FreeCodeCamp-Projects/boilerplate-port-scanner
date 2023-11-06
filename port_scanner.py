@@ -1,5 +1,6 @@
 import socket
 import re
+import time
 from common_ports import ports_and_services
 
 class InvalidParamsError(Exception):
@@ -57,61 +58,79 @@ class PortScanner:
         """"""
         # creating the socket object
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.settimeout(2)
+        self.sock.settimeout(3)
 
     def is_port_open(self, port) -> bool:
         """Test if the port is open"""
         result = False
         try:
-            result = self.sock.connect_ex((self.host, port)) == 0
-        except Exception:
+            code = self.sock.connect_ex((self.host, port))
+            result = code == 0            
+        except Exception as ex:
+            print(
+              "Is port Error - host : ", self.host, 
+              " - port : ", port, " - error : ", str(ex))
+            if str(ex) == "[Errno -2] Name or service not known":
+                if self.host_type == PortScanner.HOST_URL:
+                    raise InvalidParamsError("Error: Invalid hostname")
+                else:
+                    raise InvalidParamsError("Error: Invalid IP address")
             result = False
         return result
 
     def scan_ports(self) -> bool:
         """Test if the port is open"""
-        res = None
-        try:
-            if self.is_ready():
-                res = []
-                for port in range(self.port_range[0], self.port_range[1]):
+        result = None
+        
+        if self.is_ready():
+            result = []
+            for port in range(self.port_range[0], self.port_range[1]+1):
+                try:
                     self.init_socket()
-                    if self.is_port_open(port):
-                        res.append(port)
+                    if self.is_port_open(port) is True:
+                        # print("port is open ", port)
+                        result.append(port)
                     self.close_socket()
-        except Exception:
-            self.close_socket()
-        return res
+                    time.sleep(0.2)
+                except InvalidParamsError as ex:
+                    self.close_socket()
+                    raise InvalidParamsError(ex)
+                except Exception as ex:
+                    print("scan_ports Error : ", str(ex))
+                    self.close_socket()
+        return result
     
     def get_verbose(self, scan):
         """"""
         if self.host_name is not None and self.ip_addr is not None:
-            result = "\r\nOpen ports for %s (%s)\r\n"% (self.host_name, self.ip_addr)
+            result = "Open ports for %s (%s)\n"% (self.host_name, self.ip_addr)
         elif self.host_name is not None:
-            result = "\r\nOpen ports for %s\r\n"% (self.host_name)
+            result = "Open ports for %s\n"% (self.host_name)
         else:
-            result = "\r\nOpen ports for %s\r\n"% (self.ip_addr)
+            result = "Open ports for %s\n"% (self.ip_addr)
         
-        result += "PORT     SERVICE\r\n"
+        result += "PORT     SERVICE\n"
 
         if isinstance(scan, list) and len(scan) > 0:
-            for port in scan:
+            for key, port in enumerate(scan):
                 nb_spaces = 9 - len(str(port))
                 spacer = " " * nb_spaces
+                if key > 0:
+                    result += '\n'
                 if port in ports_and_services:
-                    result += "%s%s%s\r\n" % (
+                    result += "%s%s%s" % (
                         port,
                         spacer,
                         ports_and_services.get(port)
                     )
                 else:
-                    result += "%s%s%s\r\n" % (port, spacer, "UNKNWOWN")
+                    result += "%s%s%s" % (port, spacer, "UNKNWOWN")
         return result
 
     def run(self):
         """"""
         scan = self.scan_ports()
-        if isinstance(scan, list) and self.verbose is True:
+        if self.verbose is True:
             scan = self.get_verbose(scan)
         return scan
 
@@ -123,20 +142,6 @@ class PortScanner:
             result = True
         except Exception:
             result = "Unknown"
-        return result
-
-    @staticmethod
-    def port_to_string(port: int) -> bool:
-        """Test if is valid ip adress"""
-        result = ""
-        if port < 10:
-            result = "    %s"%port
-        elif port < 100:
-            result = "   %s"%port
-        elif port < 1000:
-            result = "  %s"%port
-        elif port < 10000:
-            result = " %s"%port
         return result
 
     @staticmethod
@@ -195,7 +200,7 @@ def get_open_ports(target, port_range, verbose=False):
     result = []
     try:
         scanner = PortScanner(target, port_range, verbose)
-        scanner.run()
+        result =scanner.run()
     except InvalidParamsError as ex:
         result = str(ex)
 
