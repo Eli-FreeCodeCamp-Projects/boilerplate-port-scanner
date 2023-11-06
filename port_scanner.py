@@ -1,5 +1,6 @@
 import socket
 import re
+from common_ports import ports_and_services
 
 class InvalidParamsError(Exception):
     """InvalidIpError Error Exception."""
@@ -9,10 +10,12 @@ class PortScanner:
     def __init__(self, host, port_range, verbose=False):
         """"""
         self.sock = None
-        self.host = None
+        self.host_name = None
+        self.ip_addr = None
         self.host_type = None
         self.port_range = None
         self.verbose = False
+        self.init_socket()
         self.init_params(host, port_range, verbose)
     
     (HOST_IP, HOST_URL) = range(2)
@@ -22,7 +25,7 @@ class PortScanner:
 
     def is_ready(self):
         return self.sock is not None\
-            and self.host is not None\
+            and self.ip_addr is not None\
             and self.port_range is not None\
     
     def init_params(self, host, port_range, verbose=False):
@@ -31,15 +34,20 @@ class PortScanner:
         if self.host_type == PortScanner.HOST_IP:
             if not PortScanner.is_valid_ip(host):
                 raise InvalidParamsError("Error: Invalid IP address")
+            else:
+                self.host_name = socket.gethostbyaddr(host)
+                self.ip_addr = host
         elif self.host_type == PortScanner.HOST_URL:
             if not PortScanner.is_valid_url(host):
                 raise InvalidParamsError("Error: Invalid hostname")
+            else:
+                self.host_name = host
+                self.ip_addr = socket.gethostbyname(host)
         else:
             raise InvalidParamsError("Error: Invalid hostname")
         
         if not PortScanner.is_valid_port_range(port_range):
             raise InvalidParamsError("Error: Invalid ports range.")
-        self.host = host
         self.port_range = port_range
         if verbose is True:
             self.verbose = True
@@ -52,7 +60,7 @@ class PortScanner:
 
     def is_port_open(self, port) -> bool:
         """Test if the port is open"""
-        return not self.sock.connect_ex((self.host, port))
+        return not self.sock.connect_ex((self.ip_addr, port))
     
     def scan_ports(self) -> bool:
         """Test if the port is open"""
@@ -67,17 +75,24 @@ class PortScanner:
     
     def get_verbose(self, scan):
         """"""
-        return """
+        result = """
         Open ports for %s (%s)
         PORT\tSERVICE
-        """ % (self.host, self.host)
+        """ % (self.host_name, self.ip_addr)
+
+        if isinstance(scan, list) and len(scan) > 0:
+            for port in scan:
+                if port in ports_and_services:
+                    result += "%s\t%s" % (port, ports_and_services.get(port))
+                else:
+                    result += "%s\t%s" % (port, "UNKNWOWN")
+        return result
 
     def run(self):
         """"""
-        self.init_socket()
         scan = self.scan_ports()
         if isinstance(scan, list) and self.verbose is True:
-            scan = self.get_verbose()
+            scan = self.get_verbose(scan)
         return scan
 
 
